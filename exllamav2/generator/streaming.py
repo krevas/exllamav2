@@ -31,6 +31,7 @@ class ExLlamaV2StreamingGenerator(ExLlamaV2BaseGenerator):
         self.stop_tokens = [tokenizer.eos_token_id]
 
         self.no_tokens = torch.empty((1, 0), dtype = torch.long)
+        self.unicode_cnt = 0
 
 
     def set_stop_conditions(self, stop_conditions):
@@ -73,7 +74,16 @@ class ExLlamaV2StreamingGenerator(ExLlamaV2BaseGenerator):
         # Decode the tail end of the sequence with the added token to get (actual) characters added
 
         new_tail = self.tokenizer.decode(self.sequence_ids[:, -(self.tail_decode_tokens + 1):])[0]
-        self.held_text += new_tail[len(old_tail):]
+        if "�" == new_tail[len(old_tail):]:
+            self.unicode_cnt += 1
+        elif self.unicode_cnt == 0:
+            self.held_text += new_tail[len(old_tail):]
+        elif self.unicode_cnt == 2:
+            self.held_text += new_tail[len(old_tail)-2:]
+            self.unicode_cnt = 0
+        elif self.unicode_cnt == 3:
+            self.held_text += new_tail[len(old_tail)-3:]
+            self.unicode_cnt = 0
         self.held_tokens = torch.cat([self.held_tokens, next_token], dim = -1)
 
         # Hold text as long as it contains part of a stop string
